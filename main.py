@@ -1,7 +1,12 @@
 import asyncio
 import sys
+import logging
 from src.ai_agent import AIAgent
 from src.utils.ollama_client import check_ollama_connection, list_ollama_models
+
+# Set up main logger
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 
 EXAMPLE_QUERIES = [
@@ -65,26 +70,34 @@ TABLE_METADATA = {
 
 async def main():
     """Main entry point for the AI SQL Agent."""
+    logger.info("Starting AI SQL Agent Demo")
     print('🚀 AI SQL Agent Demo (Python)\n')
     
+    logger.info("Checking Ollama connection")
     print('🔌 Checking Ollama connection...')
     is_connected = await check_ollama_connection()
     
     if not is_connected:
+        logger.error("Failed to connect to Ollama")
         print('❌ Cannot connect to Ollama. Please ensure Ollama is running on http://localhost:11434')
         print('💡 Install Ollama from: https://ollama.ai')
         print('💡 Start Ollama with: ollama serve')
         print('💡 Pull a model with: ollama pull llama3.1')
         return
     
+    logger.info("Ollama connection successful")
     print('✅ Ollama connection successful')
     
     try:
+        logger.info("Listing available Ollama models")
         models = await list_ollama_models()
+        logger.info(f"Found {len(models)} available models: {models}")
         print(f'📋 Available models: {", ".join(models)}')
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Could not list available models: {str(e)}")
         print('⚠️  Could not list available models')
     
+    logger.info(f"Initializing AI Agent with {len(EXAMPLE_QUERIES)} example queries and {len(TABLE_METADATA)} tables")
     agent = AIAgent({
         'example_queries': EXAMPLE_QUERIES,
         'table_metadata': TABLE_METADATA
@@ -96,7 +109,10 @@ async def main():
         "Get monthly sales trends for the last 6 months"
     ]
     
-    for query in test_queries:
+    logger.info(f"Starting processing of {len(test_queries)} test queries")
+    
+    for i, query in enumerate(test_queries, 1):
+        logger.info(f"Processing query {i}/{len(test_queries)}: '{query}'")
         print(f'\n{"=" * 60}')
         print(f'Query: {query}')
         print(f'{"=" * 60}')
@@ -104,12 +120,14 @@ async def main():
         result = await agent.process_query(query)
         
         if result['success']:
+            logger.info(f"Query {i} processed successfully in {result['processing_time']}ms")
             print('\n📊 Generated SQL Query:')
             print('```sql')
             print(result['final_query'])
             print('```\n')
             
             summary = agent.get_processing_summary(result)
+            logger.debug(f"Query {i} summary: {summary}")
             print('📋 Processing Summary:')
             print(f'- Refined Input: "{summary["steps"].get("refinement", {}).get("refined", "N/A")}"')
             print(f'- Selected Tables: {", ".join(summary["steps"].get("table_selection", {}).get("selected_tables", [])) or "N/A"}')
@@ -117,8 +135,12 @@ async def main():
             print(f'- Processing Time: {summary["processing_time"]}ms')
             print(f'- Query Valid: {"✅" if summary["steps"].get("validation", {}).get("is_valid") else "❌"}')
         else:
+            logger.error(f"Query {i} failed: {result['error']}")
             print(f'\n❌ Error: {result["error"]}')
+
+    logger.info("AI SQL Agent Demo completed")
 
 
 if __name__ == "__main__":
+    logger.info("Starting main execution")
     asyncio.run(main())
